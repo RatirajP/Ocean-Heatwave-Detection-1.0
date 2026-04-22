@@ -1,0 +1,93 @@
+import pandas as pd
+from pathlib import Path
+from sklearn.metrics import accuracy_score
+
+# =========================
+# Paths
+# =========================
+repo_root = Path(__file__).parent
+submissions_dir = repo_root / "submissions"
+labels_file = repo_root / "data" / "test_labels.csv"
+leaderboard_file = repo_root / "leaderboard.csv"
+readme_file = repo_root / "LEADERBOARD.md"
+
+# =========================
+# Main Function
+# =========================
+def create_leaderboard():
+    print("🏆 Creating Leaderboard...\n")
+
+    # Check files
+    if not labels_file.exists():
+        print("❌ test_labels.csv not found")
+        return
+
+    if not submissions_dir.exists():
+        print("❌ submissions folder not found")
+        return
+
+    # Load ground truth
+    y_true = pd.read_csv(labels_file)["Marine Heatwave"]
+
+    results = []
+
+    # Process submissions
+    for file in submissions_dir.glob("*.csv"):
+        team_name = file.stem
+        print(f"Processing: {team_name}")
+
+        try:
+            df = pd.read_csv(file)
+
+            if "prediction" not in df.columns:
+                print(f"⚠ Skipped {team_name} (missing 'prediction')")
+                continue
+
+            y_pred = df["prediction"]
+
+            # Length check
+            if len(y_pred) != len(y_true):
+                print(f"⚠ Skipped {team_name} (length mismatch)")
+                continue
+
+            acc = accuracy_score(y_true, y_pred)
+
+            results.append({
+                "Team": team_name,
+                "Accuracy": round(acc, 5)
+            })
+
+        except Exception as e:
+            print(f"❌ Error in {team_name}: {e}")
+
+    # No results case
+    if not results:
+        print("❌ No valid submissions found")
+        return
+
+    # Create leaderboard
+    leaderboard = pd.DataFrame(results)
+    leaderboard = leaderboard.sort_values(by="Accuracy", ascending=False)
+    leaderboard.insert(0, "Rank", range(1, len(leaderboard) + 1))
+
+    # Save CSV
+    leaderboard.to_csv(leaderboard_file, index=False)
+    print(f"\n✅ Leaderboard saved to {leaderboard_file}")
+
+    # Save Markdown leaderboard (for GitHub display)
+    save_markdown(leaderboard)
+
+# =========================
+# Markdown Generator
+# =========================
+def save_markdown(df):
+    with open(readme_file, "w") as f:
+        f.write("# 🏆 Leaderboard\n\n")
+        f.write(df.to_markdown(index=False))
+    print(f"📄 Leaderboard Markdown saved to {readme_file}")
+
+# =========================
+# Run
+# =========================
+if __name__ == "__main__":
+    create_leaderboard()
